@@ -25,6 +25,12 @@ import Url from "utils/Url";
 import { isVersionGreater } from "utils/version";
 import view, { cleanups } from "./plugin.view.js";
 
+// DEV MODE: In debug/nightly builds, all paid plugins are treated as purchased
+// so developers can install and test plugins without payment.
+const DEV_MODE = typeof BuildInfo !== "undefined"
+	? BuildInfo.debug === true || BuildInfo.debug === "true"
+	: false;
+
 let $lastPluginPage;
 
 /**
@@ -145,7 +151,7 @@ export default async function PluginInclude(
 
 			unsupportedEditor = installedPlugin.supported_editor;
 			isSupported = isPluginEditorSupported(unsupportedEditor);
-			isPaid = installedPlugin.price > 0;
+			isPaid = DEV_MODE ? false : installedPlugin.price > 0;
 			$page.settitle(plugin.name);
 			render();
 		}
@@ -181,11 +187,12 @@ export default async function PluginInclude(
 
 					if (!Number.parseFloat(remotePlugin.price)) return;
 
-					isPaid = remotePlugin.price > 0;
-					purchased = remotePlugin.owned;
+					isPaid = DEV_MODE ? false : remotePlugin.price > 0;
+					purchased = DEV_MODE ? true : remotePlugin.owned;
 					price = `${remotePlugin.currencySymbol ?? ""}${remotePlugin.price}`;
 
 					if (
+						!DEV_MODE &&
 						helpers.isIapAvailable() &&
 						!purchased &&
 						(await helpers.checkAPIStatus())
