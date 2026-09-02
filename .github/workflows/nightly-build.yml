@@ -193,7 +193,7 @@ jobs:
       - name: Create GitHub Release
         if: ${{ !inputs.is_PR }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           VERSION="${{ steps.version.outputs.updated_version }}"
           TAG="$VERSION"
