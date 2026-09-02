@@ -45,7 +45,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
    # Allow only one workflow per branch.
@@ -189,3 +189,46 @@ jobs:
           echo "| F-Droid APK Artifact Name | ${{ steps.meta.outputs.fdroid_artifact_name || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Normal APK Artifact SHA256 | ${{ steps.sha256.outputs.normal_apk_sha256 }} |" >> $GITHUB_STEP_SUMMARY
           echo "| F-Droid APK Artifact SHA256 | ${{ steps.sha256.outputs.fdroid_apk_sha256 || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.is_PR }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.updated_version }}"
+          TAG="$VERSION"
+          COMMIT="${{ steps.meta.outputs.git_commit }}"
+          SHORT="$(echo "$COMMIT" | cut -c1-7)"
+
+          # Delete existing release/tag with same name if exists
+          gh release delete "$TAG" --repo ${{ github.repository }} --yes 2>/dev/null || true
+          git push origin :refs/tags/"$TAG" 2>/dev/null || true
+
+          # Build release notes
+          NOTES=$(cat <<EOF
+          ## 🌙 Nightly Build — $VERSION
+
+          | Field | Value |
+          | ----- | ----- |
+          | **Commit** | [$SHORT](https://github.com/${{ github.repository }}/commit/$COMMIT) |
+          | **Branch** | \`${{ github.ref_name }}\` |
+          | **Build Type** | Paid Debug (Nightly) |
+          | **Normal APK SHA256** | \`${{ steps.sha256.outputs.normal_apk_sha256 }}\` |
+          | **F-Droid APK SHA256** | \`${{ steps.sha256.outputs.fdroid_apk_sha256 || 'N/A' }}\` |
+
+          > ⚠️ This is a **debug/nightly** build. Not for production use.
+          EOF
+          )
+
+          # Create the release and upload APKs
+          ASSETS="${{ env.NORMAL_APK_PATH }}"
+          if [ -f "${{ env.FDROID_APK_PATH }}" ]; then
+            ASSETS="$ASSETS ${{ env.FDROID_APK_PATH }}"
+          fi
+
+          gh release create "$TAG" \
+            --repo ${{ github.repository }} \
+            --title "🌙 Nightly $VERSION" \
+            --notes "$NOTES" \
+            --prerelease \
+            $ASSETS
